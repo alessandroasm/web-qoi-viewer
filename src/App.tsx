@@ -1,23 +1,39 @@
-import React from 'react';
-import logo from './logo.svg';
-import './App.css';
+import React, { ChangeEventHandler, useEffect, useState } from "react";
+import logo from "./logo.svg";
+import "./App.css";
+
+import { ImageCanvas } from "./components/imageCanvas";
 
 function App() {
+  const [image, setImage] = useState<HTMLImageElement | undefined>(undefined);
+
+  useEffect(() => {
+    const img = new Image();
+    img.src = "logo192.png";
+    img.onload = () => {
+      setImage(img);
+    };
+  }, []);
+
+  const fileSelected: ChangeEventHandler<HTMLInputElement> = async (e) => {
+    console.log(e);
+    if (e.target.files?.length === 0) return;
+    const file = e.target.files![0];
+    const buffer = await file.arrayBuffer();
+    const bufferView = new Uint8Array(buffer);
+
+    console.log(buffer);
+    debugger;
+  };
+
   return (
     <div className="App">
       <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
         <p>
           Edit <code>src/App.tsx</code> and save to reload.
         </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
+        {image && <ImageCanvas image={image} />}
+        <input type="file" onChange={fileSelected} />
       </header>
     </div>
   );
