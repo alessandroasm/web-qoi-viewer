@@ -22,3 +22,13 @@ code {
   background-size: 16px 16px;
   background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
 }
+
+.image-selector input {
+  display: none;
+}
+.image-selector-droparea {
+  width: 200px;
+  height: 75px;
+  background-color: #555;
+  margin: 15px;
+}

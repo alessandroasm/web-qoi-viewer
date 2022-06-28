@@ -57,7 +57,7 @@ export class QoiParser {
     // 1 = all channels linear
     const colorspace = contents[12];
 
-    console.log(width, height, channels, colorspace);
+    //console.log(width, height, channels, colorspace);
     return { width, height, channels, colorspace, headerSize: 14 };
   }
 
@@ -174,7 +174,6 @@ export class QoiParser {
       // Parsing the operation tag
       const tag = contents[p++];
       if (tag === 0 && detectEndSequence(p - 1)) {
-        console.log("reached end");
         break;
       }
 
