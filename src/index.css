@@ -23,6 +23,11 @@ code {
   background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
 }
 
+.image-selector {
+  display: flex;
+  align-items: center;
+  user-select: none;
+}
 .image-selector input {
   display: none;
 }

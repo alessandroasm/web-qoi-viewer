@@ -1,6 +1,7 @@
 import { ChangeEventHandler, DragEventHandler, useRef } from "react";
 import { Bitmap } from "../lib/bitmap";
 import { QoiParser } from "../lib/qoi";
+import { TargaParser } from "../lib/targa";
 
 interface ImageSelectorOptions {
   onImageSelected?: (image: HTMLImageElement) => void;
@@ -21,6 +22,15 @@ export function ImageSelector(options: ImageSelectorOptions) {
       if (options.onBitmapSelected) {
         const qoi = new QoiParser();
         let bitmap = qoi.parse(Uint8ClampedArray.from(bufferView));
+        if (bitmap) options.onBitmapSelected(bitmap);
+      }
+    } else if (/\.tga$/i.test(file.name)) {
+      const buffer = await file.arrayBuffer();
+      const bufferView = new Uint8Array(buffer);
+
+      if (options.onBitmapSelected) {
+        const targa = new TargaParser();
+        let bitmap = targa.parse(Uint8ClampedArray.from(bufferView));
         if (bitmap) options.onBitmapSelected(bitmap);
       }
     } else {
@@ -67,7 +77,7 @@ export function ImageSelector(options: ImageSelectorOptions) {
       <input
         ref={inputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,.qoi"
         onChange={fileSelected}
       />
       <div
@@ -78,7 +88,7 @@ export function ImageSelector(options: ImageSelectorOptions) {
         onDragLeave={dragOutHighlight}
         onDragOver={dragOverHighlight}
       >
-        Click here to open a file
+        <div>Click here to open a file</div>
       </div>
     </div>
   );
