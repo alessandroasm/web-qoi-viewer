@@ -1,4 +1,4 @@
-import { readFile } from "fs/promises";
+import { Bitmap } from "./bitmap";
 
 type QoiHeader = {
   width: number;
@@ -15,27 +15,54 @@ type QoiPixel = {
   a: number;
 };
 
-class QoiParser {
-  private parseHeader(contents: Buffer): QoiHeader | null {
-    const magic = Buffer.from("qoif");
-    if (!magic.equals(contents.slice(0, 4))) return null;
+function uintArrayContains(
+  str: Uint8ClampedArray,
+  array: Uint8ClampedArray,
+  offset: number = 0
+) {
+  if (str.length + offset > array.length) return false;
+
+  for (let k = 0; k < str.length; k++) {
+    if (str[k] !== array[k + offset]) return false;
+  }
+
+  return true;
+}
+
+function uintArrayReadInt32BE<T extends Uint8ClampedArray | Uint8Array>(
+  array: T,
+  offset: number
+) {
+  return (
+    array[offset + 3] |
+    (array[offset + 2] << 8) |
+    (array[offset + 1] << 16) |
+    (array[offset] << 24)
+  );
+}
+
+export class QoiParser {
+  private parseHeader(contents: Uint8ClampedArray): QoiHeader | null {
+    const enc = new TextEncoder();
+    const magic = new Uint8ClampedArray(enc.encode("qoif"));
+    if (!uintArrayContains(magic, contents)) return null;
 
     // image width in pixels (BE)
-    const width = contents.readInt32BE(4);
+    const width = uintArrayReadInt32BE(contents, 4);
     // image height in pixels (BE)
-    const height = contents.readInt32BE(8);
+    const height = uintArrayReadInt32BE(contents, 8);
     // 3 = RGB, 4 = RGBA
-    const channels = contents.readInt8(12);
+    const channels = contents[12];
     // 0 = sRGB with linear alpha
     // 1 = all channels linear
-    const colorspace = contents.readInt8(13);
+    const colorspace = contents[12];
 
     console.log(width, height, channels, colorspace);
     return { width, height, channels, colorspace, headerSize: 14 };
   }
 
-  private parsePixels(header: QoiHeader, contents: Uint8Array) {
-    const pixels = new Uint8Array(
+  private parsePixels(header: QoiHeader, contents: Uint8ClampedArray) {
+    const pixels = new Uint8ClampedArray(
       new ArrayBuffer(header.width * header.height * 4)
     );
     let prevArray: QoiPixel[] = Array.from({ length: 64 }, () => ({
@@ -46,7 +73,7 @@ class QoiParser {
     }));
 
     const indexPosition = (pixel: QoiPixel) =>
-      (pixel.r * 3 + pixel.g * 5 + pixel.b * 7 * pixel.a * 11) % 64;
+      (pixel.r * 3 + pixel.g * 5 + pixel.b * 7 + pixel.a * 11) % 64;
 
     let p = header.headerSize;
     let idx = 0;
@@ -69,11 +96,11 @@ class QoiParser {
       return x % 256;
     };
 
-    const opRgba = (rgbOnly: boolean) => {
+    const opRgba = (rgbOnly: boolean, prevPixel: QoiPixel) => {
       const r = contents[p];
       const g = contents[p + 1];
       const b = contents[p + 2];
-      const a = rgbOnly ? 255 : contents[p + 3];
+      const a = rgbOnly ? prevPixel.a : contents[p + 3];
 
       setPixel({ r, g, b, a });
       p = rgbOnly ? p + 3 : p + 4;
@@ -118,15 +145,22 @@ class QoiParser {
     };
 
     const opRun = (tag: number, prevPixel: QoiPixel) => {
-      const count = tag & 0x3f;
+      const count = (tag & 0x3f) + 1;
       for (let k = 0; k < count; k++) setPixel(prevPixel);
     };
 
-    const endSequence = Buffer.from([0, 0, 0, 0, 0, 0, 0, 1]);
+    const endSequence = Uint8Array.from([0, 0, 0, 0, 0, 0, 0, 1]);
+    const detectEndSequence = (p: number) => {
+      for (let k = 0; k < endSequence.length; k++) {
+        if (contents[p + k] !== endSequence[k]) return false;
+      }
+
+      return true;
+    };
 
     while (p < contents.length) {
       // Retrieving last pixel
-      const prevPixel: QoiPixel | null =
+      const prevPixel: QoiPixel =
         idx === 0
           ? { r: 0, g: 0, b: 0, a: 255 }
           : {
@@ -135,31 +169,17 @@ class QoiParser {
               b: pixels[idx - 2],
               a: pixels[idx - 1],
             };
-
-      if (prevPixel) {
-        prevArray[indexPosition(prevPixel)] = prevPixel;
-      }
-
-      const requirePrevPixel = (opName: string) => {
-        if (!prevPixel)
-          throw new Error(`Invalid ${opName} without previous pixel`);
-      };
+      prevArray[indexPosition(prevPixel)] = prevPixel;
 
       // Parsing the operation tag
       const tag = contents[p++];
-      if (tag === 0) {
-        console.log(
-          endSequence.equals(contents.slice(p - 1, 8)),
-          contents.slice(p - 1, 8).map((v) => v)
-        );
-      }
-      if (tag === 0 && endSequence.equals(contents.slice(p - 1, 8))) {
+      if (tag === 0 && detectEndSequence(p - 1)) {
         console.log("reached end");
         break;
       }
 
       if (tag === QOI_OP_RGB || tag === QOI_OP_RGBA) {
-        opRgba(tag === QOI_OP_RGB);
+        opRgba(tag === QOI_OP_RGB, prevPixel);
         continue;
       }
 
@@ -172,36 +192,31 @@ class QoiParser {
 
         // QOI_OP_DIFF
         case 0b01:
-          requirePrevPixel("QOI_OP_DIFF");
-          opDiff(tag, prevPixel!);
+          opDiff(tag, prevPixel);
           break;
 
         // QOI_OP_LUMA
         case 0b10:
-          requirePrevPixel("QOI_OP_LUMA");
-          opLuma(tag, prevPixel!);
+          opLuma(tag, prevPixel);
           break;
 
         // QOI_OP_RUN
         case 0b11:
-          requirePrevPixel("QOI_OP_RUN");
-          opRun(tag, prevPixel!);
+          opRun(tag, prevPixel);
           break;
       }
     }
+
+    return pixels;
   }
 
-  async open() {
-    const contents = await readFile("assets/testcard.qoi");
+  parse(buffer: Uint8ClampedArray): Bitmap | null {
+    const header = this.parseHeader(buffer);
+    if (!header) return null;
 
-    let header = this.parseHeader(contents);
-    if (!header) return false;
+    const pixels = this.parsePixels(header, buffer);
+    if (!pixels) return null;
 
-    this.parsePixels(header, contents);
-
-    return true;
+    return new Bitmap(header.width, header.height, pixels);
   }
 }
-
-const parser = new QoiParser();
-parser.open();

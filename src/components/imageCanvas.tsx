@@ -20,7 +20,15 @@ export function ImageCanvas(props: ImageCanvasProps) {
     if (!ctx) return;
 
     if (image) ctx.drawImage(image, 0, 0);
-  }, []);
+    if (bitmap) {
+      const imageData = new ImageData(
+        bitmap.pixels,
+        bitmap.width,
+        bitmap.height
+      );
+      ctx.putImageData(imageData, 0, 0);
+    }
+  }, [image, bitmap]);
 
   return (
     <canvas
