@@ -24,7 +24,7 @@ export function ImageSelector(options: ImageSelectorOptions) {
         let bitmap = qoi.parse(Uint8ClampedArray.from(bufferView));
         if (bitmap) options.onBitmapSelected(bitmap);
       }
-    } else if (/\.tga$/i.test(file.name)) {
+    } else if (/\.(tga|vda|icb|vst)$/i.test(file.name)) {
       const buffer = await file.arrayBuffer();
       const bufferView = new Uint8Array(buffer);
 
@@ -77,7 +77,7 @@ export function ImageSelector(options: ImageSelectorOptions) {
       <input
         ref={inputRef}
         type="file"
-        accept="image/*,.qoi"
+        accept="image/*,.qoi,.tga,.vda,.icb,.vst"
         onChange={fileSelected}
       />
       <div

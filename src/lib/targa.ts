@@ -2,6 +2,7 @@ import { Bitmap } from "./bitmap";
 
 type TargaHeader = {
   idLength: number;
+  idField: string;
   colorMapType: number;
   dataTypeCode: TargaDataType;
   colorMapOrigin: number;
@@ -13,6 +14,11 @@ type TargaHeader = {
   height: number;
   bitsPerPixel: number;
   imageDescriptor: number;
+  footer?: {
+    extensionAreaOffset: number;
+    devDirectoryOffset: number;
+  };
+
   headerSize: number;
 };
 
@@ -20,6 +26,7 @@ type TargaPixel = {
   r: number;
   g: number;
   b: number;
+  a?: number;
 };
 
 function uintArrayContains(
@@ -36,17 +43,18 @@ function uintArrayContains(
   return true;
 }
 
-function uintArrayReadInt32BE<T extends Uint8ClampedArray | Uint8Array>(
+function uintArrayReadInt32LE<T extends Uint8ClampedArray | Uint8Array>(
   array: T,
   offset: number
 ) {
   return (
-    array[offset + 3] |
-    (array[offset + 2] << 8) |
-    (array[offset + 1] << 16) |
-    (array[offset] << 24)
+    array[offset] |
+    (array[offset + 1] << 8) |
+    (array[offset + 2] << 16) |
+    (array[offset + 3] << 24)
   );
 }
+
 function uintArrayReadInt16LE<T extends Uint8ClampedArray | Uint8Array>(
   array: T,
   offset: number
@@ -98,23 +106,32 @@ export class TargaParser {
       [0, 1, 2, 3, 9, 10, 11].includes(colorMapType) &&
       [15, 16, 24, 32].includes(bitsPerPixel);
 
-    return isValid
-      ? {
-          idLength,
-          colorMapType,
-          dataTypeCode,
-          colorMapOrigin,
-          colorMapLength,
-          colorMapDepth,
-          xOrigin,
-          yOrigin,
-          width,
-          height,
-          bitsPerPixel,
-          imageDescriptor,
-          headerSize: 18,
-        }
-      : null;
+    if (isValid) {
+      const headerSize = 18 + idLength;
+
+      const tDec = new TextDecoder();
+      const idField =
+        idLength > 0 ? tDec.decode(contents.slice(18, headerSize)) : "";
+
+      return {
+        idLength,
+        idField,
+        colorMapType,
+        dataTypeCode,
+        colorMapOrigin,
+        colorMapLength,
+        colorMapDepth,
+        xOrigin,
+        yOrigin,
+        width,
+        height,
+        bitsPerPixel,
+        imageDescriptor,
+        headerSize,
+      };
+    }
+
+    return null;
   }
 
   private parsePixels(
@@ -134,9 +151,9 @@ export class TargaParser {
       const r = dataView.getByte();
       const g = dataView.getByte();
       const b = dataView.getByte();
-      const attr = dataView.getByte();
+      const a = dataView.getByte();
 
-      return { r, g, b };
+      return { r, g, b, a };
     };
     const decode3BytePixel = (): TargaPixel => {
       const r = dataView.getByte();
@@ -199,18 +216,31 @@ export class TargaParser {
         pixels[idx++] = pixel.r;
         pixels[idx++] = pixel.g;
         pixels[idx++] = pixel.b;
-        pixels[idx++] = 255;
+        pixels[idx++] = pixel.a ?? 255;
       }
     }
 
     return pixels;
   }
 
+  parseFooter(buffer: Uint8ClampedArray) {
+    const footerData = buffer.slice(buffer.length - 26);
+
+    const tEnc = new TextEncoder();
+    const magic = new Uint8ClampedArray(tEnc.encode("TRUEVISION-XFILE"));
+    if (!uintArrayContains(magic, footerData, 8)) return;
+    if (footerData[24] !== 0x2e || footerData[25] !== 0) return;
+
+    const extensionAreaOffset = uintArrayReadInt32LE(footerData, 0);
+    const devDirectoryOffset = uintArrayReadInt32LE(footerData, 4);
+
+    return { extensionAreaOffset, devDirectoryOffset };
+  }
+
   parse(buffer: Uint8ClampedArray): Bitmap | null {
     const header = this.parseHeader(buffer);
     if (!header || header.dataTypeCode === TargaDataType.NoImage) return null;
-
-    console.log("header might include id field", header);
+    header.footer = this.parseFooter(buffer);
 
     // Parsing data
     const dataView = new ArrayView(buffer, header.headerSize);
