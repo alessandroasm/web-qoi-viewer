@@ -1,13 +1,19 @@
 import { useEffect, useRef } from "react";
 import { Bitmap } from "../lib/bitmap";
-import { Image } from "rs-wasm-encoders";
-// import { Image, encode_image } from "rs-wasm-encoders";
-// import { memory } from "rs-wasm-encoders/rs_wasm_encoders_bg.wasm";
+//import { Image } from "rs-wasm-encoders";
+import initEncoder, { Image, encode_image, InitOutput } from "rs-wasm-encoders";
+//import { memory } from "rs-wasm-encoders/rs_wasm_encoders_bg";
 
 interface ImageCanvasProps {
   bitmap?: Bitmap;
   image?: CanvasImageSource;
 }
+
+//type Unpromisify<T> = T extends Promise<infer U> ? U : T
+//type InitOutput = Unpromisify<ReturnType<typeof initEncoder>>;
+
+let initOutput: InitOutput;
+initEncoder().then((output) => (initOutput = output));
 
 export function ImageCanvas(props: ImageCanvasProps) {
   const canvasEl = useRef<HTMLCanvasElement>(null);
@@ -38,18 +44,22 @@ export function ImageCanvas(props: ImageCanvasProps) {
     const ctx = canvas?.getContext("2d");
     if (!ctx) return;
 
-    debugger
+    debugger;
 
-    const width = canvas?.width as number
-    const height = canvas?.height as number
-    const imageData = ctx.getImageData(0, 0, width, height)
-    const imageRs = Image.new(width, height)
-   
-    // const rsBuffer = new Uint8ClampedArray(memory.buffer, imageRs.buffer(), width * height * 4)
-    // rsBuffer.set(imageData.data)
+    const width = canvas?.width as number;
+    const height = canvas?.height as number;
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const imageRs = Image.new(width, height);
 
-    // const resultingImg = encode_image(imageRs)
-    // console.log(resultingImg);
+    const rsBuffer = new Uint8ClampedArray(
+      initOutput.memory.buffer,
+      imageRs.buffer(),
+      width * height * 4
+    );
+    rsBuffer.set(imageData.data);
+
+    const resultingImg = encode_image(imageRs);
+    console.log(resultingImg);
   };
 
   return (
