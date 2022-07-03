@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import { Bitmap } from "../lib/bitmap";
-import { Image, encode_image } from "rs-wasm-encoders";
+import { Image } from "rs-wasm-encoders";
+// import { Image, encode_image } from "rs-wasm-encoders";
+// import { memory } from "rs-wasm-encoders/rs_wasm_encoders_bg.wasm";
 
 interface ImageCanvasProps {
   bitmap?: Bitmap;
@@ -32,7 +34,22 @@ export function ImageCanvas(props: ImageCanvasProps) {
   }, [image, bitmap]);
 
   const exportImage = () => {
-    //Image.new()
+    const canvas = canvasEl.current;
+    const ctx = canvas?.getContext("2d");
+    if (!ctx) return;
+
+    debugger
+
+    const width = canvas?.width as number
+    const height = canvas?.height as number
+    const imageData = ctx.getImageData(0, 0, width, height)
+    const imageRs = Image.new(width, height)
+   
+    // const rsBuffer = new Uint8ClampedArray(memory.buffer, imageRs.buffer(), width * height * 4)
+    // rsBuffer.set(imageData.data)
+
+    // const resultingImg = encode_image(imageRs)
+    // console.log(resultingImg);
   };
 
   return (
