@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Bitmap } from "../lib/bitmap";
+import { Image, encode_image } from "rs-wasm-encoders";
 
 interface ImageCanvasProps {
   bitmap?: Bitmap;
@@ -30,12 +31,19 @@ export function ImageCanvas(props: ImageCanvasProps) {
     }
   }, [image, bitmap]);
 
+  const exportImage = () => {
+    //Image.new()
+  };
+
   return (
-    <canvas
-      ref={canvasEl}
-      className="image-canvas"
-      width={width}
-      height={height}
-    />
+    <div>
+      <canvas
+        ref={canvasEl}
+        className="image-canvas"
+        width={width}
+        height={height}
+      />
+      <button onClick={exportImage}>Export</button>
+    </div>
   );
 }
