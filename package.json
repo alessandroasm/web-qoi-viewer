@@ -21,7 +21,9 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "build-wasm-pack": "cd rs-wasm-encoders && wasm-pack build",
+    "build-wasm": "yarn build-wasm-pack && yarn upgrade rs-wasm-encoders"
   },
   "eslintConfig": {
     "extends": [
