@@ -1,7 +1,13 @@
 import { useEffect, useRef } from "react";
 import { Bitmap } from "../lib/bitmap";
 //import { Image } from "rs-wasm-encoders";
-import initEncoder, { Image, encode_image, InitOutput } from "rs-wasm-encoders";
+import initEncoder, {
+  Image,
+  encode_image,
+  InitOutput,
+  encode_qoi_simple,
+} from "rs-wasm-encoders";
+import { downloadBlob } from "../lib/utils";
 //import { memory } from "rs-wasm-encoders/rs_wasm_encoders_bg";
 
 interface ImageCanvasProps {
@@ -15,6 +21,8 @@ interface ImageCanvasProps {
 let initOutput: InitOutput;
 initEncoder().then((output) => (initOutput = output));
 
+let canvasCtx: CanvasRenderingContext2D;
+
 export function ImageCanvas(props: ImageCanvasProps) {
   const canvasEl = useRef<HTMLCanvasElement>(null);
 
@@ -25,8 +33,10 @@ export function ImageCanvas(props: ImageCanvasProps) {
     typeof image?.height === "number" ? image.height : bitmap?.height || 100;
 
   useEffect(() => {
-    const ctx = canvasEl.current?.getContext("2d");
+    const ctx = canvasCtx || canvasEl.current?.getContext("2d");
     if (!ctx) return;
+
+    canvasCtx = ctx;
 
     if (image) ctx.drawImage(image, 0, 0);
     if (bitmap) {
@@ -41,7 +51,8 @@ export function ImageCanvas(props: ImageCanvasProps) {
 
   const exportImage = () => {
     const canvas = canvasEl.current;
-    const ctx = canvas?.getContext("2d");
+    //const ctx = canvas?.getContext("2d");
+    const ctx = canvasCtx;
     if (!ctx) return;
 
     debugger;
@@ -49,17 +60,26 @@ export function ImageCanvas(props: ImageCanvasProps) {
     const width = canvas?.width as number;
     const height = canvas?.height as number;
     const imageData = ctx.getImageData(0, 0, width, height);
-    const imageRs = Image.new(width, height);
+    // const imageRs = Image.new(width, height);
 
-    const rsBuffer = new Uint8ClampedArray(
-      initOutput.memory.buffer,
-      imageRs.buffer(),
-      width * height * 4
+    // const rsBuffer = new Uint8ClampedArray(
+    //   initOutput.memory.buffer,
+    //   imageRs.buffer(),
+    //   width * height * 4
+    // );
+    // rsBuffer.set(imageData.data);
+
+    // const resultingImg = encode_image(imageRs);
+
+    const resultingImg = encode_qoi_simple(
+      width,
+      height,
+      imageData.data as any
     );
-    rsBuffer.set(imageData.data);
 
-    const resultingImg = encode_image(imageRs);
     console.log(resultingImg);
+
+    downloadBlob(resultingImg, "image.qoi");
   };
 
   return (

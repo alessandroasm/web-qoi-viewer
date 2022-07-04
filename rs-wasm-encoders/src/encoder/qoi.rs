@@ -10,7 +10,7 @@ struct QoiPixel {
 }
 
 const QOI_OP_RGB: u8 = 0b11111110;
-//const QOI_OP_RGBA: u8 = 0b11111111;
+const QOI_OP_RGBA: u8 = 0b11111111;
 const QOI_OP_INDEX: u8 = 0b00000000;
 const QOI_OP_DIFF: u8 = 0b01000000;
 const QOI_OP_LUMA: u8 = 0b10000000;
@@ -18,7 +18,7 @@ const QOI_OP_RUN: u8 = 0b11000000;
 
 enum QoiOp {
     Rgb,
-    //Rgba,
+    Rgba,
     Index,
     Diff,
     Luma,
@@ -64,6 +64,10 @@ impl<'a> Qoi<'a> {
     fn encode_op_diff(contents: &mut BytesMut, pixel: &QoiPixel, prev_pixel: &QoiPixel) -> bool {
         use std::num::Wrapping;
 
+        if pixel.a != prev_pixel.a {
+            return false;
+        }
+
         let cdiff = |cur: u8, prev: u8| {
             let d = Wrapping(cur as i8) - Wrapping(prev as i8) + Wrapping(2);
 
@@ -87,6 +91,10 @@ impl<'a> Qoi<'a> {
 
     fn encode_op_luma(contents: &mut BytesMut, pixel: &QoiPixel, prev_pixel: &QoiPixel) -> bool {
         use std::num::Wrapping;
+
+        if pixel.a != prev_pixel.a {
+            return false;
+        }
 
         let green_diff = Wrapping(pixel.g as i8) - Wrapping(prev_pixel.g as i8);
         if (-32..=31).contains(&green_diff.0) {
@@ -132,6 +140,20 @@ impl<'a> Qoi<'a> {
         }
     }
 
+    fn encode_op_rgba(contents: &mut BytesMut, pixel: &QoiPixel, prev_pixel: &QoiPixel) -> bool {
+        if pixel.a == prev_pixel.a {
+            return false;
+        }
+
+        contents.put_u8(QOI_OP_RGBA);
+        contents.put_u8(pixel.r);
+        contents.put_u8(pixel.g);
+        contents.put_u8(pixel.b);
+        contents.put_u8(pixel.a);
+
+        true
+    }
+
     fn encode_op_rgb(contents: &mut BytesMut, pixel: &QoiPixel) -> bool {
         contents.put_u8(QOI_OP_RGB);
         contents.put_u8(pixel.r);
@@ -156,12 +178,18 @@ impl<'a> Qoi<'a> {
 
         let mut i = 0;
         let pixel_buffer = &self.image.pixels();
-        let mut prev_pixel_ref: Option<QoiPixel> = None;
+        let mut prev_pixel = QoiPixel {
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 255,
+        };
         let ops = [
             QoiOp::Run,
             QoiOp::Index,
             QoiOp::Diff,
             QoiOp::Luma,
+            QoiOp::Rgba,
             QoiOp::Rgb,
         ];
         let mut prev_pixel_run_cnt = 0u8;
@@ -170,22 +198,21 @@ impl<'a> Qoi<'a> {
             let r = pixel_buffer[i];
             let g = pixel_buffer[i + 1];
             let b = pixel_buffer[i + 2];
+            let a = pixel_buffer[i + 3];
 
-            let pixel = QoiPixel { r, g, b, a: 255 };
+            let pixel = QoiPixel { r, g, b, a };
             let pixel_idx = index_position(&pixel);
 
             for op in ops.iter() {
                 match *op {
                     QoiOp::Run => {
-                        if let Some(prev_pixel) = prev_pixel_ref {
-                            if Qoi::encode_op_run(
-                                contents,
-                                &pixel,
-                                &prev_pixel,
-                                &mut prev_pixel_run_cnt,
-                            ) {
-                                break;
-                            }
+                        if Qoi::encode_op_run(
+                            contents,
+                            &pixel,
+                            &prev_pixel,
+                            &mut prev_pixel_run_cnt,
+                        ) {
+                            break;
                         }
                     }
                     QoiOp::Index => {
@@ -194,17 +221,18 @@ impl<'a> Qoi<'a> {
                         }
                     }
                     QoiOp::Diff => {
-                        if let Some(prev_pixel) = prev_pixel_ref {
-                            if Qoi::encode_op_diff(contents, &pixel, &prev_pixel) {
-                                break;
-                            }
+                        if Qoi::encode_op_diff(contents, &pixel, &prev_pixel) {
+                            break;
                         }
                     }
                     QoiOp::Luma => {
-                        if let Some(prev_pixel) = prev_pixel_ref {
-                            if Qoi::encode_op_luma(contents, &pixel, &prev_pixel) {
-                                break;
-                            }
+                        if Qoi::encode_op_luma(contents, &pixel, &prev_pixel) {
+                            break;
+                        }
+                    }
+                    QoiOp::Rgba => {
+                        if Qoi::encode_op_rgba(contents, &pixel, &prev_pixel) {
+                            break;
                         }
                     }
                     QoiOp::Rgb => {
@@ -218,8 +246,8 @@ impl<'a> Qoi<'a> {
             }
 
             prev_array[pixel_idx] = pixel;
-            prev_pixel_ref = Some(pixel);
-            i += 3;
+            prev_pixel = pixel;
+            i += 4;
         }
 
         Qoi::encode_op_run_final(contents, &mut prev_pixel_run_cnt);

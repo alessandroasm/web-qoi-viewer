@@ -23,6 +23,14 @@ impl Image {
         }
     }
 
+    pub fn new_with_data(width: usize, height: usize, pixels: &[u8]) -> Image {
+        Image {
+            width,
+            height,
+            pixels: pixels.to_vec(),
+        }
+    }
+
     pub fn width(&self) -> usize {
         self.width
     }
@@ -31,7 +39,7 @@ impl Image {
         self.height
     }
 
-    pub fn buffer(&self) -> *const u8 {
+    pub fn buffer(&mut self) -> *const u8 {
         self.pixels.as_ptr()
     }
 }
